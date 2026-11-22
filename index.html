@@ -1,1 +1,386 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PH Payroll Calculator</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 30px 15px;
+  font-family: Arial, sans-serif;
+  background: #100b1b;
+  color: #f5f0ff;
+}
+.container {
+  max-width: 720px;
+  margin: auto;
+  background: #21172f;
+  padding: 30px;
+  border-radius: 18px;
+  border: 1px solid #49335f;
+}
+h1 { text-align: center; color: #d5aaff; }
+.subtitle { text-align: center; color: #b9a9c9; }
+h2 { color: #c99aff; margin-top: 30px; font-size: 19px; }
+label { display: block; margin: 12px 0 6px; }
+input, select {
+  width: 100%;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #6c527f;
+  background: #322540;
+  color: white;
+  font-size: 15px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+}
+button {
+  width: 100%;
+  padding: 14px;
+  margin-top: 22px;
+  background: #ae75f7;
+  color: #170e25;
+  font-weight: bold;
+  border: none;
+  border-radius: 9px;
+  cursor: pointer;
+}
+button:hover { background: #cca1ff; }
+.summary {
+  background: #30233e;
+  padding: 22px;
+  margin-top: 25px;
+  border-radius: 12px;
+}
+.line {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 8px 0;
+}
+.net {
+  font-size: 24px;
+  font-weight: bold;
+  color: #d9b4ff;
+}
+.note {
+  color: #baaccb;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.error { color: #ffb4b4; }
+hr { border: 0; border-top: 1px solid #604d71; }
+@media(max-width: 480px) {
+  .grid { grid-template-columns: 1fr; }
+  .container { padding: 20px; }
+}
+@media print {
+  body, .container, .summary {
+    background: white;
+    color: black;
+    border: none;
+  }
+  .form-area, button, .note { display: none !important; }
+  h1, h2, .net { color: black; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>PH PAYROLL CALCULATOR</h1>
+  <p class="subtitle">
+    Philippine Payroll System | 2026
+  </p>
+
+  <div class="form-area">
+    <h2>Employee Information</h2>
+
+    <label>Employee Name</label>
+    <input id="name" placeholder="Enter employee name">
+
+    <label>Payroll Mode</label>
+    <select id="mode">
+      <option value="monthly">Monthly Deductions</option>
+      <option value="proportional">
+        Proportional Period Estimate
+      </option>
+    </select>
+
+    <h2>Salary Information</h2>
+    <div class="grid">
+      <div>
+        <label>Daily Salary (PHP)</label>
+        <input id="rate" type="number" min="0" value="600">
+      </div>
+      <div>
+        <label>Days Worked</label>
+        <input id="days" type="number" min="0" value="8">
+      </div>
+      <div>
+        <label>Normal Hours Per Day</label>
+        <input id="hours" type="number" min="1" max="8" value="8">
+      </div>
+      <div>
+        <label>Overtime Hours</label>
+        <input id="ot" type="number" min="0" value="0">
+      </div>
+      <div>
+        <label>Working Days Per Month</label>
+        <input id="workdays" type="number" min="1" value="22">
+      </div>
+      <div>
+        <label>Monthly Basic Salary (PHP)</label>
+        <input id="monthly" type="number" min="0" value="13200">
+      </div>
+    </div>
+
+    <h2>Previous Monthly Deductions</h2>
+    <p class="note">
+      For monthly mode, enter contributions already
+      deducted earlier in the month. Leave at zero
+      if none were deducted.
+    </p>
+
+    <div class="grid">
+      <div>
+        <label>SSS Already Deducted</label>
+        <input id="oldSSS" type="number" min="0" value="0">
+      </div>
+      <div>
+        <label>PhilHealth Already Deducted</label>
+        <input id="oldPH" type="number" min="0" value="0">
+      </div>
+      <div>
+        <label>Pag-IBIG Already Deducted</label>
+        <input id="oldPI" type="number" min="0" value="0">
+      </div>
+      <div>
+        <label>BIR Already Withheld</label>
+        <input id="oldTax" type="number" min="0" value="0">
+      </div>
+    </div>
+
+    <label>Other Deductions (PHP)</label>
+    <input id="other" type="number" min="0" value="0">
+
+    <button onclick="calculate()">CALCULATE PAYROLL</button>
+  </div>
+
+  <div id="result"></div>
+
+  <button id="printBtn" style="display:none"
+          onclick="window.print()">
+    PRINT PAYSLIP
+  </button>
+
+  <p class="note">
+    Educational estimate only. Assumes ordinary
+    working days, standard employee contribution
+    rules, and a monthly BIR tax estimate.
+    Holidays, rest days, night differentials,
+    exemptions, supplementary compensation and
+    employer-specific adjustments are not included.
+  </p>
+</div>
+
+<script>
+const num = id => Number(document.getElementById(id).value);
+const round = n => Math.round((n + Number.EPSILON) * 100) / 100;
+const money = n => "₱" + n.toLocaleString("en-PH", {
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2
+});
+
+function sss(salary) {
+  if (salary <= 0) return 0;
+
+  // SSS 2025 contribution schedule:
+  // 5% employee share of monthly salary credit.
+  let credit = Math.floor((salary + 250) / 500) * 500;
+  credit = Math.max(5000, Math.min(35000, credit));
+  return round(credit * 0.05);
+}
+
+function philhealth(salary) {
+  if (salary <= 0) return 0;
+
+  // 5% total premium, shared equally.
+  let basis = Math.max(10000, Math.min(100000, salary));
+  return round(basis * 0.025);
+}
+
+function pagibig(salary) {
+  if (salary <= 0) return 0;
+
+  const rate = salary <= 1500 ? 0.01 : 0.02;
+  return round(Math.min(salary, 10000) * rate);
+}
+
+function birMonthly(taxable) {
+  // Monthly withholding brackets effective 2023 onward.
+  if (taxable <= 20833) return 0;
+  if (taxable <= 33333)
+    return (taxable - 20833) * 0.15;
+  if (taxable <= 66667)
+    return 1875 + (taxable - 33333) * 0.20;
+  if (taxable <= 166667)
+    return 8541.80 + (taxable - 66667) * 0.25;
+  if (taxable <= 666667)
+    return 33541.80 + (taxable - 166667) * 0.30;
+  return 183541.80 + (taxable - 666667) * 0.35;
+}
+
+function row(label, value) {
+  return `<div class="line">
+    <span>${label}</span>
+    <strong>${money(value)}</strong>
+  </div>`;
+}
+
+function calculate() {
+  const name = document.getElementById("name").value.trim();
+  const mode = document.getElementById("mode").value;
+  const rate = num("rate");
+  const days = num("days");
+  const hours = num("hours");
+  const ot = num("ot");
+  const workdays = num("workdays");
+  const monthly = num("monthly");
+  const other = num("other");
+
+  const oldSSS = num("oldSSS");
+  const oldPH = num("oldPH");
+  const oldPI = num("oldPI");
+  const oldTax = num("oldTax");
+
+  const result = document.getElementById("result");
+  const printBtn = document.getElementById("printBtn");
+  printBtn.style.display = "none";
+
+  const ids = [
+    "rate", "days", "hours", "ot", "workdays",
+    "monthly", "other", "oldSSS", "oldPH",
+    "oldPI", "oldTax"
+  ];
+
+  const invalid = ids.some(id => {
+    const el = document.getElementById(id);
+    return el.value.trim() === "" ||
+      !Number.isFinite(Number(el.value)) ||
+      Number(el.value) < 0;
+  });
+
+  if (!name || invalid || hours <= 0 || hours > 8 ||
+      workdays <= 0 || days > workdays) {
+    result.innerHTML = `
+      <p class="error">
+        Please enter valid details.
+        Days worked must not exceed monthly working days,
+        and normal hours must be between 1 and 8.
+      </p>`;
+    return;
+  }
+
+  // Salary calculations
+  const basic = round(rate * days);
+  const hourly = rate / hours;
+  const overtime = round(hourly * ot * 1.25);
+  const gross = round(basic + overtime);
+
+  // Full monthly employee contributions
+  const fullSSS = sss(monthly);
+  const fullPH = philhealth(monthly);
+  const fullPI = pagibig(monthly);
+
+  // Monthly BIR estimate based on regular salary.
+  // Overtime and supplementary compensation excluded.
+  const taxable = Math.max(0,
+    monthly - fullSSS - fullPH - fullPI);
+  const fullTax = round(birMonthly(taxable));
+
+  let SSS, PH, PI, TAX;
+
+  if (mode === "monthly") {
+    SSS = Math.max(0, fullSSS - oldSSS);
+    PH = Math.max(0, fullPH - oldPH);
+    PI = Math.max(0, fullPI - oldPI);
+    TAX = Math.max(0, fullTax - oldTax);
+  } else {
+    const fraction = Math.min(1, days / workdays);
+    SSS = fullSSS * fraction;
+    PH = fullPH * fraction;
+    PI = fullPI * fraction;
+    TAX = fullTax * fraction;
+  }
+
+  SSS = round(SSS);
+  PH = round(PH);
+  PI = round(PI);
+  TAX = round(TAX);
+
+  const total = round(SSS + PH + PI + TAX + other);
+  const net = round(gross - total);
+
+  const safeName = name.replace(/[&<>"']/g, c => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  }[c]));
+
+  result.innerHTML = `
+    <div class="summary">
+      <h2>EMPLOYEE PAYSLIP</h2>
+      <p><strong>Employee:</strong> ${safeName}</p>
+      <p><strong>Payroll Mode:</strong>
+        ${mode === "monthly"
+          ? "Monthly Deductions"
+          : "Proportional Estimate"}
+      </p>
+      <p><strong>Days Worked:</strong> ${days}</p>
+      <p><strong>Hours Per Day:</strong> ${hours}</p>
+
+      <hr>
+      <h2>Earnings</h2>
+      ${row("Basic Salary", basic)}
+      ${row("Overtime Pay", overtime)}
+      ${row("Gross Salary", gross)}
+
+      <hr>
+      <h2>Government Deductions</h2>
+      ${row("SSS", SSS)}
+      ${row("PhilHealth", PH)}
+      ${row("Pag-IBIG", PI)}
+      ${row("BIR Withholding Estimate", TAX)}
+      ${row("Other Deductions", other)}
+
+      <hr>
+      ${row("Total Deductions", total)}
+
+      <div class="line net">
+        <span>NET PAY</span>
+        <span>${money(net)}</span>
+      </div>
+
+      <p class="note">
+        Estimated payslip. Monthly mode collects
+        the remaining monthly deductions; proportional
+        mode allocates deductions by days worked.
+        BIR tax is based on regular monthly salary only.
+      </p>
+    </div>
+  `;
+
+  printBtn.style.display = "block";
+}
+</script>
+</body>
+</html>
+
